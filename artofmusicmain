@@ -1,0 +1,237 @@
+//
+// Disclaimer:
+// ----------
+//
+// This code will work only if you selected window, graphics and audio.
+//
+// Note that the "Run Script" build phase will copy the required frameworks
+// or dylibs to your application bundle so you can execute it on any macOS
+// computer.
+//
+// Your resource files (images, sounds, fonts, ...) are also copied to your
+// application bundle. To get the path to these resources, use the helper
+// function `resourcePath()` from ResourcePath.hpp
+//
+
+#include <SFML/Graphics.hpp>
+
+#include <SFML/Audio.hpp>
+
+#include <SFML/Window/Event.hpp>
+
+#include "ResourcePath.hpp"
+
+#include <string>
+
+#include <iostream>
+
+#include <vector>
+
+#include <cstdlib>
+
+#include <ctime>
+
+#include <random>
+
+
+float calculateDB(float amplitude) {
+    if (amplitude <= 0.0001f) return -100.0f; // for too little values
+    return 20.0f * std::log10(amplitude);
+}
+
+float calculateStandardDeviation(const std::vector<float>& values, float mean) {
+    float sum = 0.0f;
+    for (float v : values) {
+        sum += (v - mean) * (v - mean);
+    }
+    return std::sqrt(sum / values.size());
+}
+
+
+float generateRandomFloat(float min, float max) {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> dist(min, max); //range
+    return dist(gen);
+}
+
+//to generate random color
+sf::Color rndcolourgenerator(){
+    sf::Color colorarry[8] = {sf::Color::Blue, sf::Color::White, sf::Color::Red, sf::Color::Cyan, sf::Color::Green, sf::Color::Yellow, sf::Color::Magenta, sf::Color::Transparent};
+    
+    sf::Color mycolor = colorarry[rand()%8];
+    
+    return mycolor;
+}
+
+sf::CircleShape rndcirclegenerator() {
+    // Create a circle with a random radius between 5 and 55
+    sf::CircleShape circle(rand() % 50 + 5);
+
+    // Set a random position within the window bounds
+    circle.setPosition(sf::Vector2f(rand() % 700 + 100, rand() % 500 + 100));
+
+    // Assign a random fill color
+    circle.setFillColor(rndcolourgenerator());
+
+    // Assign a random outline color
+    circle.setOutlineColor(rndcolourgenerator());
+
+    // Set a random outline thickness
+    circle.setOutlineThickness(rand() % 9 + 2);
+
+    return circle;
+}
+
+sf::RectangleShape rndrectanglegenerator(){
+    
+    sf::RectangleShape rectangle({static_cast<float>(rand()%50+5), static_cast<float>(rand()%50 + 5)});
+    
+    rectangle.setPosition(sf::Vector2f(rand() % 700 + 100, rand() % 500 + 100));
+
+    rectangle.setFillColor(rndcolourgenerator());
+    
+    rectangle.setOutlineColor(rndcolourgenerator());
+    
+    rectangle.setOutlineThickness(rand() % 9 + 2);
+    
+    return rectangle;
+}
+
+
+sf::CircleShape rndangulargenerator(){
+    
+    sf::CircleShape angular(generateRandomFloat(0.f,50.f), rand() % 10 + 3);
+    
+    angular.setPosition(sf::Vector2f(rand() % 700 + 100, rand() % 500 + 100));
+
+    angular.setFillColor(rndcolourgenerator());
+    
+    angular.setOutlineColor(rndcolourgenerator());
+    
+    angular.setOutlineThickness(rand() % 9 + 2);
+    
+    return angular;
+}
+
+
+
+int main()
+{
+    srand(static_cast<unsigned int>(time(0)));
+    // Create the main window
+    sf::RenderWindow window(sf::VideoMode({800, 600}), "SFML window");
+    
+    
+    // Clock to control circle generation timing
+    sf::Clock clock;
+    std::vector<sf::CircleShape> circles;
+    std::vector<sf::RectangleShape> rectangles;
+    std::vector<sf::CircleShape> others;
+    
+    
+    sf::SoundBuffer buffer("/Users/ipekgezer/Desktop/ozbegen.wav"); //write the path to the music
+    
+    const std::int16_t* samples = buffer.getSamples();
+    std::size_t sampleCount = buffer.getSampleCount();
+    
+    std::vector<float> amplitudes;
+    float sumSquares = 0.0f;
+    int sampleStep = 1000;
+    
+    for (std::size_t i = 0; i < sampleCount; i += sampleStep) {
+        float sum = 0.0f;
+        for (int j = 0; j < sampleStep && (i + j) < sampleCount; ++j) {
+            sum += samples[i + j] / 32768.0f;
+        }
+        float avgSample = sum / sampleStep;
+        sumSquares += avgSample * avgSample;
+        amplitudes.push_back(std::abs(avgSample));
+    }
+
+    
+    
+    // It's a little complicated I used help in this part since it involves a lot of physics and music theory
+    float rmsAmplitude = std::sqrt(sumSquares / sampleCount);
+    float rmsDB = calculateDB(rmsAmplitude);
+    
+    
+    float meanAmplitude = std::accumulate(amplitudes.begin(), amplitudes.end(), 0.0f) / amplitudes.size();
+    float stdDeviation = calculateStandardDeviation(amplitudes, meanAmplitude);
+    
+    float thresholdAmplitude = meanAmplitude + 1.5f * stdDeviation;
+    float thresholdDB = calculateDB(thresholdAmplitude);
+    
+    
+    int shapeStep = 5000;
+
+    for (std::size_t i = 0; i < sampleCount; i += shapeStep) {
+        float sampleDB = calculateDB(std::abs(samples[i]) / 32768.0f); //to generate less shape
+        
+        if (sampleDB < thresholdDB) {
+            
+           
+            float diff = thresholdDB - sampleDB;
+            
+            //generates shapes according to intervals determined by me and stores them in vectors
+
+            if (20.0f <= diff && diff < 40.0f) {
+                circles.push_back(rndcirclegenerator());
+            }
+            else if (diff > 40.0f && diff <= 60.0f) {
+                rectangles.push_back(rndrectanglegenerator());
+            }
+            else if (60.0f < diff) {
+                others.push_back(rndangulargenerator());
+            }
+            
+            
+            
+        }
+        
+    }
+    
+    while (window.isOpen())
+    {
+        // Process events
+        while (const auto event = window.pollEvent())
+        {
+            // Close window: exit
+            if (event->is<sf::Event::Closed>())
+            {
+                window.close();
+            }
+            
+            // Escape pressed: exit
+            if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>();
+                keyPressed && keyPressed->code == sf::Keyboard::Key::Escape)
+            {
+                window.close();
+            }
+        }
+        
+        // Clear screen
+        window.clear(sf::Color::Black);
+        
+        //draw all circles
+        for (const auto& circle : circles) {
+            window.draw(circle);
+        }
+        
+        // Draw all rectangles
+        for (const auto& rectangle : rectangles) {
+            window.draw(rectangle);
+        }
+        
+        //draw others
+        for (const auto& other : others) {
+            window.draw(other);
+        }
+        
+        window.display();
+        
+        
+        
+    }
+    return 0;
+}
